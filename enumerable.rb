@@ -1,91 +1,126 @@
 module Enumerable
-  def my_each(&block)
-    return unless block_given?
+  def my_each
+    return to_enum(:my_each) unless block_given?
 
-    each(&block)
+    to_a.length.times do | i |
+      yield to_a[i]
+      i += 1
+    end
     self
   end
-end
-
 def my_each_with_index
-  return unless block_given?
+  return to_enum(:my_each_with_index) unless block_given?
 
-  i = 0
-  each do |something|
-    yield(something, i)
-    i += 1
-  end
-  self
-end
+      to_a.length.times do | i |
+        yield(to_a[i], i)
+        i += 1
+      end
+      self
+    end
 
-def my_select
-  return unless block_given?
+    def my_select
+      return to_enum(:my_select) unless block_given?
+  
+      arr = []
+      my_each { |something| arr << something if yield something }
+      arr
+    end
 
-  arr = []
-  my_each do |something|
-    arr.push(something) if yield(something)
-  end
-  arr
-end
+    def my_all?(param = nil)
+      if block_given?
+        to_a.my_each { |something| return false if yield(something) == false }
+        return true
+      elsif param.nil?
+        to_a.my_each { |something| return false if something.nil? || something == false }
+      elsif !param.nil? && (param.is_a? Class)
+        to_a.my_each { |something| return false unless [something.class, something.class.superclass].include?(param) }
+      elsif !param.nil? && param.instance_of?(Regexp)
+        to_a.my_each { |something| return false unless param.match(something) }
+      else
+        to_a.my_each { |something| return false if something != param }
+      end
+      true
+    end
 
-def my_all?
-  return unless block_given?
+    def my_any?(param = nil)
+      if block_given?
+        to_a.my_each { |something| return true if yield(something) }
+        return false
+      elsif param.nil?
+        to_a.my_each { |something| return true if something }
+      elsif !param.nil? && (param.is_a? Class)
+        to_a.my_each { |something| return true if [something.class, something.class.superclass].include?(param) }
+      elsif !param.nil? && param.instance_of?(Regexp)
+        to_a.my_each { |something| return true if param.match(something) }
+      else
+        to_a.my_each { |something| return true if something == param }
+      end
+      false
+    end
 
-  condition = true
-  my_each do |something|
-    condition = false unless yield(something)
-  end
-  condition
-end
+    def my_none?(argum = nil)
+      if !block_given? && argum.nil?
+        my_each { |i| return false if i }
+        return true
+      end
+  
+      if !block_given? && !argum.nil?
+  
+        if argum.is_a?(Class)
+          my_each { |i| return false if i.instance_of?(argum) }
+          return true
+        end
+  
+        if argum.instance_of?(Regexp)
+          my_each { |i| return false if argum.match(i) }
+          return true
+        end
+  
+        my_each { |i| return false if i == argum }
+        return true
+      end
+      my_any? { |something| return false if yield(something) }
+      true
+    end
 
-def my_any?
-  return unless block_given?
+    def my_count(param = nil)
+      j = 0
+      if block_given?
+        to_a.my_each { |item| j += 1 if yield(item) }
+      elsif !block_given? && param.nil?
+      j  = to_a.length
+      else
+        j = to_a.my_select { |something| something == param }.length
+      end
+      j
+    end
 
-  condition = false
-  my_each do |something|
-    condition = true if yield(something)
-  end
-  condition
-end
+def my_map(proc_x = nil)
+  return enum_for unless block_given?
 
-def my_none?
-  return unless block_given?
-
-  condition = false
-  my_each do |something|
-    condition = true unless yield(something)
-  end
-end
-
-def my_count
-  return length unless block_given?
-
-  counter = 0
-  my_each do |something|
-    counter += 1 if yield(something)
-  end
-  counter
-end
-
-def my_map(proc = nil)
   mapping = []
-  if !proc.nil?
-    my_each do |something|
-      mapping.push(proc.call(something))
-    end
+  if proc_x.nil?
+    my_each { |something| mapping.push(yield(something)) }
   else
-    my_each do |something|
-      mapping.push(yield(something))
-    end
+    my_each { |something| mapping.push(proc_x.call(something)) }
   end
   mapping
 end
 
-def my_inject(initial = nil)
-  result = initial.nil? ? self[0] : initial
-  i = initial.nil? ? 1 : 0
-  self[i...length].my_each do |something|
-    result = yield(result, something)
+def my_inject(initial = nil, sym = nil)
+  if (!initial.nil? && sym.nil?) && (initial.is_a?(Symbol) || initial.is_a?(String))
+    sym = initial
+    initial = nil
   end
-  result
+  if !block_given? && !sym.nil?
+    to_a.my_each { |something| initial = initial.nil? ? something : initial.send(sym, something) }
+  else
+    to_a.my_each { |something| initial = initial.nil? ? something : yield(initial, something) }
+  end
+  initial
+end
+end
+
+def multiply_els(par)
+  par.my_inject(1) { |a, b| a * b }
 end
